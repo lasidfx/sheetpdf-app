@@ -40,6 +40,7 @@ details{margin-top:10px}small{color:#777}
 <details><summary>고급 설정</summary>
 <label class="sl">검사 간격(초) <span id="vi"></span><input type="range" id="interval" min="0.2" max="2" step="0.1" value="0.5"></label>
 <label class="sl">페이지 바뀜 민감도 <span id="vc"></span> <small>(같은 장이 중복되면 올리고, 놓치면 내리세요)</small><input type="range" id="change" min="0.005" max="0.2" step="0.005" value="0.05"></label>
+<label class="sl"><input type="checkbox" id="overlap" checked style="width:auto"> 겹치는 마디 자동 제거 <small>(스크롤되는 악보에서 앞 장과 겹친 부분을 마디선 기준으로 잘라냄)</small></label>
 <label class="sl">중복 판정 기준 <span id="vd"></span><input type="range" id="dup" min="0" max="0.1" step="0.005" value="0.02"></label></details>
 <div class="row"><button id="btnExtract" onclick="extract()">③ 악보 캡처 시작</button></div>
 <div class="bar hide" id="bar2"><div></div></div><div class="msg" id="m2"></div></section>
@@ -77,11 +78,11 @@ let tm;ids.forEach(i=>$(i).addEventListener('input',()=>{$(lab[i]).textContent=$
 ids.forEach(i=>$(lab[i]).textContent=$(i).value);
 function preview(){$('prev').src=`/api/frame?t=${$('t').value}&top=${$('top').value}&bottom=${$('bottom').value}&left=${$('left').value}&right=${$('right').value}&_=${Date.now()}`}
 async function extract(){$('btnExtract').disabled=true;$('m2').textContent='';
- const r=await api('/api/extract',{top:+$('top').value/100,bottom:+$('bottom').value/100,left:+$('left').value/100,right:+$('right').value/100,interval:+$('interval').value,change:+$('change').value,dup:+$('dup').value});
+ const r=await api('/api/extract',{top:+$('top').value/100,bottom:+$('bottom').value/100,left:+$('left').value/100,right:+$('right').value/100,interval:+$('interval').value,change:+$('change').value,dup:+$('dup').value,overlap:$('overlap').checked});
  const j=await poll(r.job,'bar2');$('btnExtract').disabled=false;
  if(j.status!=='done'||!j.result.count){$('m2').innerHTML='<span class=err>악보를 찾지 못했습니다. 영역이나 민감도를 조정해 보세요. '+(j.error||'')+'</span>';return}
- N=j.result.count;$('grid').innerHTML=j.result.times.map((t,i)=>`<div class=card id=c${i}><img src="/api/page/${i}?_=${Date.now()}"><label><input type=checkbox checked data-i=${i} onchange="$('c${i}').classList.toggle('off',!this.checked)"> ${i+1}번 (${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')})</label></div>`).join('');
- $('cnt').textContent=N+'장';$('s3').classList.remove('hide');$('s4').classList.remove('hide');upd()}
+ N=j.result.count;$('grid').innerHTML=j.result.times.map((t,i)=>`<div class=card id=c${i}><img src="/api/page/${i}?_=${Date.now()}"><label><input type=checkbox checked data-i=${i} onchange="$('c${i}').classList.toggle('off',!this.checked)"> ${i+1}번 (${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')})${j.result.joins[i]?' <small>· 겹침 제거됨</small>':''}</label></div>`).join('');
+ const nj=j.result.joins.filter(x=>x).length;$('cnt').textContent=N+'장'+(nj?` (겹침 제거 ${nj}곳)`:'');$('s3').classList.remove('hide');$('s4').classList.remove('hide');upd()}
 function onInst(){$('instCustom').style.display=$('inst').value==='직접 입력'?'':'none';upd()}
 $('inst').onchange=onInst;$('instCustom').oninput=upd;
 $('mode').onchange=()=>{$('rootRow').style.display=$('mode').value==='folder'?'':'none'};

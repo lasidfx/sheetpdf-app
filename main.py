@@ -14,7 +14,7 @@ import storage
 from ui import HTML
 
 app = Flask(__name__)
-S = {"workdir": tempfile.mkdtemp(prefix="sheetpdf_"), "video": None, "title": "", "pages": [], "pdf": None, "info": None}
+S = {"workdir": tempfile.mkdtemp(prefix="sheetpdf_"), "video": None, "title": "", "pages": [], "joins": [], "pdf": None, "info": None}
 JOBS = {}
 
 
@@ -81,8 +81,13 @@ def extract():
     crop = core.Crop(d["top"], d["bottom"], d["left"], d["right"])
 
     def fn(cb):
-        S["pages"] = core.extract_pages(S["video"], crop, interval=d["interval"], change_thr=d["change"], dup_thr=d["dup"], progress_cb=cb)
-        return dict(count=len(S["pages"]), times=[t for t, _ in S["pages"]])
+        pages = core.extract_pages(S["video"], crop, interval=d["interval"], change_thr=d["change"], dup_thr=d["dup"], progress_cb=cb)
+        if d.get("overlap", True):
+            pages, joins = core.remove_overlaps(pages)
+        else:
+            joins = [False] * len(pages)
+        S["pages"], S["joins"] = pages, joins
+        return dict(count=len(pages), times=[t for t, _ in pages], joins=joins)
 
     return jsonify(job=run_job(fn))
 
@@ -99,7 +104,10 @@ def finish():
     keep = d.get("keep") or []
     if not keep:
         return jsonify(error="선택된 악보가 없습니다")
-    imgs = [core.bgr_to_pil(S["pages"][i][1]) for i in keep]
+    keep = sorted(keep)
+    joins = [bool(S["joins"][i]) and k > 0 and keep[k - 1] == i - 1 for k, i in enumerate(keep)]
+    rows = core.merge_rows([S["pages"][i][1] for i in keep], joins, max(p[1].shape[1] for p in S["pages"]))
+    imgs = [core.bgr_to_pil(r) for r in rows]
     name = storage.safe_name(S["title"])
     out = os.path.join(S["workdir"], name + ".pdf")
     core.build_pdf(imgs, out, d.get("layout", "stack"))
