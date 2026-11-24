@@ -68,10 +68,12 @@ def frame():
     f = core.read_frame_at(S["video"], float(a.get("t", 0)))
     if f is None:
         return "", 404
-    c = core.Crop(int(a["top"]) / 100, int(a["bottom"]) / 100, int(a["left"]) / 100, int(a["right"]) / 100)
     h, w = f.shape[:2]
-    cv2.rectangle(f, (int(w * c.left), int(h * c.top)), (int(w * c.right) - 1, int(h * c.bottom) - 1), (0, 0, 255), max(2, w // 300))
-    f = cv2.resize(f, (960, int(h * 960 / w)))
+    if a.get("box") != "0":
+        c = core.Crop(int(a["top"]) / 100, int(a["bottom"]) / 100, int(a["left"]) / 100, int(a["right"]) / 100)
+        cv2.rectangle(f, (int(w * c.left), int(h * c.top)), (int(w * c.right) - 1, int(h * c.bottom) - 1), (0, 0, 255), max(2, w // 300))
+    nw = min(w, 1280)
+    f = cv2.resize(f, (nw, int(h * nw / w)))
     return Response(cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes(), mimetype="image/jpeg")
 
 

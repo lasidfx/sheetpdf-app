@@ -13,7 +13,15 @@ button{background:var(--b);color:#fff;border:0;border-radius:6px;padding:10px 18
 button:disabled{background:#aab;cursor:default}button.sec{background:#fff;color:var(--b);border:1px solid var(--b)}
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .crop{display:grid;grid-template-columns:2fr 1fr;gap:18px}@media(max-width:800px){.crop{grid-template-columns:1fr}}
-.crop img{width:100%;border:1px solid var(--bd);border-radius:6px}
+.crop img{width:100%;display:block;border:1px solid var(--bd);border-radius:6px;user-select:none;-webkit-user-drag:none}
+.stage{position:relative;touch-action:none}
+#box{position:absolute;border:3px solid #e53935;background:rgba(229,57,53,.08);cursor:move;box-sizing:border-box}
+#box .h{position:absolute;width:14px;height:14px;background:#fff;border:2px solid #e53935;border-radius:3px;box-sizing:border-box}
+#box .nw{left:-8px;top:-8px;cursor:nwse-resize}#box .ne{right:-8px;top:-8px;cursor:nesw-resize}
+#box .sw{left:-8px;bottom:-8px;cursor:nesw-resize}#box .se{right:-8px;bottom:-8px;cursor:nwse-resize}
+#box .n{left:calc(50% - 7px);top:-8px;cursor:ns-resize}#box .s{left:calc(50% - 7px);bottom:-8px;cursor:ns-resize}
+#box .w{top:calc(50% - 7px);left:-8px;cursor:ew-resize}#box .e{top:calc(50% - 7px);right:-8px;cursor:ew-resize}
+.quick button{padding:6px 10px;font-size:13px}
 label.sl{display:block;font-size:13px;margin-top:8px}label.sl input{width:100%}
 .bar{height:8px;background:#e3e6ea;border-radius:4px;overflow:hidden;margin-top:10px}.bar>div{height:100%;width:0;background:var(--b);transition:width .2s}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
@@ -30,12 +38,14 @@ details{margin-top:10px}small{color:#777}
 <div class="bar hide" id="bar1"><div></div></div><div class="msg" id="m1"></div></section>
 
 <section id="s2" class="hide"><h2>② 악보 영역 지정 <small id="vinfo"></small></h2>
-<div class="crop"><div><img id="prev"></div><div>
+<div class="crop"><div><div class="stage" id="stage"><img id="prev" draggable="false"><div id="box"><div class="h nw" data-h="nw"></div><div class="h n" data-h="n"></div><div class="h ne" data-h="ne"></div><div class="h e" data-h="e"></div><div class="h se" data-h="se"></div><div class="h s" data-h="s"></div><div class="h sw" data-h="sw"></div><div class="h w" data-h="w"></div></div></div>
+<small>빨간 박스를 끌어서 옮기고, 모서리·변의 흰 점을 끌어 크기를 조절하세요. 박스 안쪽이 캡처됩니다.</small>
+<div class="row quick"><button class="sec" type="button" onclick="setBox(0,45,0,100)">위쪽 악보</button><button class="sec" type="button" onclick="setBox(55,100,0,100)">아래쪽 악보</button><button class="sec" type="button" onclick="setBox(0,100,0,100)">화면 전체</button></div></div><div>
 <label class="sl">미리보기 시점 <span id="vt"></span><input type="range" id="t" min="0" value="10"></label>
-<label class="sl">위쪽 경계 <span id="vtop"></span>%<input type="range" id="top" min="0" max="95" value="55"></label>
-<label class="sl">아래쪽 경계 <span id="vbot"></span>%<input type="range" id="bottom" min="5" max="100" value="100"></label>
-<label class="sl">왼쪽 경계 <span id="vl"></span>%<input type="range" id="left" min="0" max="50" value="0"></label>
-<label class="sl">오른쪽 경계 <span id="vr"></span>%<input type="range" id="right" min="50" max="100" value="100"></label>
+<label class="sl">위쪽 경계 <span id="vtop"></span>%<input type="range" id="top" min="0" max="99" value="55"></label>
+<label class="sl">아래쪽 경계 <span id="vbot"></span>%<input type="range" id="bottom" min="1" max="100" value="100"></label>
+<label class="sl">왼쪽 경계 <span id="vl"></span>%<input type="range" id="left" min="0" max="99" value="0"></label>
+<label class="sl">오른쪽 경계 <span id="vr"></span>%<input type="range" id="right" min="1" max="100" value="100"></label>
 </div></div>
 <details><summary>고급 설정</summary>
 <label class="sl">검사 간격(초) <span id="vi"></span><input type="range" id="interval" min="0.2" max="2" step="0.1" value="0.5"></label>
@@ -74,9 +84,32 @@ async function load(){$('btnLoad').disabled=true;$('m1').textContent='';
  $('inst').value=v.guess;onInst();preview()}
 const ids=['t','top','bottom','left','right','interval','change','dup'];
 const lab={t:'vt',top:'vtop',bottom:'vbot',left:'vl',right:'vr',interval:'vi',change:'vc',dup:'vd'};
-let tm;ids.forEach(i=>$(i).addEventListener('input',()=>{$(lab[i]).textContent=$(i).value;clearTimeout(tm);tm=setTimeout(preview,150)}));
+let tm;ids.forEach(i=>$(i).addEventListener('input',()=>{
+ if(['top','bottom','left','right'].includes(i)){fixOrder(i);drawBox();}
+ $(lab[i]).textContent=$(i).value;
+ if(i==='t'){clearTimeout(tm);tm=setTimeout(preview,150)}}));
+const MIN=3;
+function fixOrder(i){let t=+$('top').value,b=+$('bottom').value,l=+$('left').value,r=+$('right').value;
+ if(i==='top'&&t>b-MIN)$('top').value=b-MIN; if(i==='bottom'&&b<t+MIN)$('bottom').value=t+MIN;
+ if(i==='left'&&l>r-MIN)$('left').value=r-MIN; if(i==='right'&&r<l+MIN)$('right').value=l+MIN;}
+function setBox(t,b,l,r){$('top').value=t;$('bottom').value=b;$('left').value=l;$('right').value=r;['top','bottom','left','right'].forEach(k=>$(lab[k]).textContent=$(k).value);drawBox()}
+function drawBox(){const bx=$('box');bx.style.top=$('top').value+'%';bx.style.left=$('left').value+'%';
+ bx.style.height=($('bottom').value-$('top').value)+'%';bx.style.width=($('right').value-$('left').value)+'%'}
+let drag=null;
+$('box').addEventListener('pointerdown',e=>{e.preventDefault();const r=$('stage').getBoundingClientRect();
+ drag={h:e.target.dataset.h||'move',x:e.clientX,y:e.clientY,W:r.width,H:r.height,t:+$('top').value,b:+$('bottom').value,l:+$('left').value,r:+$('right').value};
+ $('box').setPointerCapture(e.pointerId)});
+$('box').addEventListener('pointermove',e=>{if(!drag)return;
+ const dx=(e.clientX-drag.x)/drag.W*100,dy=(e.clientY-drag.y)/drag.H*100;let{t,b,l,r,h}=drag;
+ const cl=(v,a,z)=>Math.max(a,Math.min(z,v));
+ if(h==='move'){const hh=b-t,ww=r-l;t=cl(t+dy,0,100-hh);b=t+hh;l=cl(l+dx,0,100-ww);r=l+ww}
+ else{if(h.includes('n'))t=cl(t+dy,0,b-MIN);if(h.includes('s'))b=cl(b+dy,t+MIN,100);
+      if(h.includes('w'))l=cl(l+dx,0,r-MIN);if(h.includes('e'))r=cl(r+dx,l+MIN,100)}
+ setBox(Math.round(t),Math.round(b),Math.round(l),Math.round(r))});
+['pointerup','pointercancel'].forEach(ev=>$('box').addEventListener(ev,()=>drag=null));
+drawBox();
 ids.forEach(i=>$(lab[i]).textContent=$(i).value);
-function preview(){$('prev').src=`/api/frame?t=${$('t').value}&top=${$('top').value}&bottom=${$('bottom').value}&left=${$('left').value}&right=${$('right').value}&_=${Date.now()}`}
+function preview(){$('prev').src=`/api/frame?t=${$('t').value}&box=0&_=${Date.now()}`}
 async function extract(){$('btnExtract').disabled=true;$('m2').textContent='';
  const r=await api('/api/extract',{top:+$('top').value/100,bottom:+$('bottom').value/100,left:+$('left').value/100,right:+$('right').value/100,interval:+$('interval').value,change:+$('change').value,dup:+$('dup').value,overlap:$('overlap').checked});
  const j=await poll(r.job,'bar2');$('btnExtract').disabled=false;
