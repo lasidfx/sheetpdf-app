@@ -55,7 +55,8 @@ def load():
     def fn(cb):
         path, title = core.download_video(d["url"], os.path.join(S["workdir"], "dl_" + uuid.uuid4().hex[:6]), d.get("quality", 720), cb)
         S.update(video=path, title=title, pages=[], pdf=None, info=core.video_info(path))
-        return dict(title=title, guess=storage.guess_instrument(title), **S["info"])
+        song, artist = core.guess_song(getattr(core.download_video, "last_info", {"title": title}))
+        return dict(title=title, guess=storage.guess_instrument(title), song=song, artist=artist, **S["info"])
 
     return jsonify(job=run_job(fn))
 
@@ -112,7 +113,7 @@ def finish():
     imgs = [core.bgr_to_pil(r) for r in rows]
     name = storage.safe_name(S["title"])
     out = os.path.join(S["workdir"], name + ".pdf")
-    core.build_pdf(imgs, out, d.get("layout", "stack"))
+    core.build_pdf(imgs, out, d.get("layout", "stack"), song=d.get("song", ""), artist=d.get("artist", ""))
     S["pdf"] = (out, name + ".pdf")
     inst = d.get("instrument") or "기타"
     try:

@@ -59,6 +59,8 @@ details{margin-top:10px}small{color:#777}
 <small>필요 없는 장은 체크를 해제하세요.</small><div class="grid" id="grid" style="margin-top:10px"></div></section>
 
 <section id="s4" class="hide"><h2>⑤ PDF · 구글 드라이브 정리</h2>
+<div class="row"><label>곡 제목 <input type="text" id="song" style="width:280px"></label><label>원곡자 <input type="text" id="artist" style="width:200px"></label></div>
+<small>PDF 첫 페이지 맨 위에 들어갑니다. 비워두면 넣지 않습니다.</small>
 <div class="row"><label>악기 <select id="inst"></select></label><input type="text" id="instCustom" placeholder="악기 직접 입력" style="width:180px;display:none"></div>
 <div class="row"><label>PDF 배치 <select id="layout"><option value="stack">A4 세로에 이어 붙이기 (인쇄용)</option><option value="single">캡처 1장 = 1페이지</option></select></label></div>
 <div class="row"><label>저장 방식 <select id="mode"><option value="folder">드라이브 데스크톱 폴더 (간단)</option><option value="api">Drive API 업로드</option><option value="none">저장 안 함</option></select></label></div>
@@ -81,7 +83,7 @@ async function load(){$('btnLoad').disabled=true;$('m1').textContent='';
  if(j.status!=='done'){$('m1').innerHTML='<span class=err>다운로드 실패: '+(j.error||'')+'</span>';return}
  const v=j.result;$('m1').innerHTML='<span class=ok>불러옴: '+v.title+'</span>';$('s2').classList.remove('hide');
  $('t').max=Math.floor(v.duration);$('t').value=Math.min(10,Math.floor(v.duration));$('vinfo').textContent=`(${v.width}×${v.height}, ${(v.duration/60).toFixed(1)}분)`;
- $('inst').value=v.guess;onInst();preview()}
+ $('inst').value=v.guess;$('song').value=v.song||'';$('artist').value=v.artist||'';onInst();preview()}
 const ids=['t','top','bottom','left','right','interval','change','dup'];
 const lab={t:'vt',top:'vtop',bottom:'vbot',left:'vl',right:'vr',interval:'vi',change:'vc',dup:'vd'};
 let tm;ids.forEach(i=>$(i).addEventListener('input',()=>{
@@ -123,7 +125,7 @@ function instName(){return $('inst').value==='직접 입력'?$('instCustom').val
 function upd(){$('where').textContent='저장 위치: 악보 / '+(instName()||'?')+' / (영상 제목) /  — PNG 낱장 + PDF'}
 async function finish(){$('btnFinish').disabled=true;$('m4').textContent='처리 중…';
  const keep=[...document.querySelectorAll('#grid input:checked')].map(e=>+e.dataset.i);
- const r=await api('/api/finish',{keep,layout:$('layout').value,instrument:instName(),mode:$('mode').value,root:$('root').value.trim()});
+ const r=await api('/api/finish',{keep,layout:$('layout').value,song:$('song').value.trim(),artist:$('artist').value.trim(),instrument:instName(),mode:$('mode').value,root:$('root').value.trim()});
  $('btnFinish').disabled=false;
  if(r.error){$('m4').innerHTML='<span class=err>'+r.error+'</span>';if(r.pdf)$('dl').classList.remove('hide');return}
  $('dl').classList.remove('hide');$('m4').innerHTML='<span class=ok>완료! '+(r.saved||'')+'</span>'}

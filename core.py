@@ -1,5 +1,6 @@
 """악보 영상 -> PDF 핵심 로직."""
 import os
+import re
 from dataclasses import dataclass
 
 import cv2
@@ -37,6 +38,7 @@ def download_video(url: str, out_dir: str, max_height: int = 1080, progress_cb=N
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         path = ydl.prepare_filename(info)
+    download_video.last_info = info
     return path, info.get("title", "sheet")
 
 
@@ -171,7 +173,7 @@ A4_W, A4_H = 1240, 1754  # 150dpi
 DEBUG = False
 
 
-def build_pdf(images, out_path, layout="stack", margin=70, gap=40):
+def build_pdf(images, out_path, layout="stack", margin=70, gap=40, song="", artist=""):
     """images: PIL RGB 이미지 리스트.
 
     layout="stack": A4 세로에 악보를 위에서부터 이어 붙임(인쇄용)
@@ -182,6 +184,12 @@ def build_pdf(images, out_path, layout="stack", margin=70, gap=40):
     images = [im.convert("RGB") for im in images]
 
     if layout == "single":
+        hd = header_image(song, artist, images[0].width, images[0].width / A4_W * 1.4)
+        if hd is not None:
+            first = Image.new("RGB", (images[0].width, hd.height + images[0].height), "white")
+            first.paste(hd, (0, 0))
+            first.paste(images[0], (0, hd.height))
+            images[0] = first
         images[0].save(out_path, "PDF", resolution=150.0, save_all=True, append_images=images[1:])
         return out_path
 
@@ -190,6 +198,10 @@ def build_pdf(images, out_path, layout="stack", margin=70, gap=40):
     y = margin
     cw = A4_W - 2 * margin
     scale = cw / max(im.width for im in images)  # 모든 줄을 같은 배율로
+    hd = header_image(song, artist, cw)
+    if hd is not None:
+        page.paste(hd, (margin, y))
+        y += hd.height + gap // 2
     for im in images:
         cw_i, h = int(im.width * scale), int(im.height * scale)
         if h > A4_H - 2 * margin:  # 너무 큰 경우 페이지 높이에 맞춤
@@ -345,3 +357,77 @@ def merge_rows(bgr_images, joins, row_w=None):
     for s in strips:
         rows += wrap_strip(s, row_w) if s.shape[1] > row_w else [s]
     return rows
+
+
+# ---------------------------------------------------------------- 곡 제목 / 원곡자
+_NOISE = re.compile(
+    r"\[[^\]]*\]|\([^)]*\)|【[^】]*】|「[^」]*」"
+    r"|\b(bass|guitar|piano|drum|violin|ukulele|flute|sax)\s*(tab|tabs|cover|sheet\s*music|sheet|score|tutorial|lesson)?\b"
+    r"|\b(tab|tabs|sheet\s*music|sheet|score|cover|tutorial|lesson|playthrough|lyrics?|mv|m/v|official|audio|with)\b"
+    r"|악보|타브|커버|연주|베이스|기타|피아노|드럼|레슨|강좌",
+    re.I,
+)
+
+
+def _clean(s):
+    s = _NOISE.sub(" ", s or "")
+    s = re.sub(r"[|#/]+.*$", " ", s)
+    return re.sub(r"\s+", " ", s).strip(" -–—:·,'\"")
+
+
+def guess_song(info):
+    """yt-dlp 정보에서 (곡 제목, 원곡자) 추정. 모르면 빈 문자열."""
+    info = info or {}
+    track, artist = info.get("track"), info.get("artist") or info.get("creator")
+    if track:
+        return track.strip(), (artist or "").split(",")[0].strip()
+    title = info.get("title") or ""
+    for sep in (" - ", " – ", " — ", " _ "):
+        if sep in title:
+            left, right = title.split(sep, 1)
+            a, t = _clean(left), _clean(right)
+            if a and t:
+                return t, a
+    return _clean(title) or title, ""
+
+
+def _font(size):
+    from PIL import ImageFont
+    cands = [
+        "C:/Windows/Fonts/malgunbd.ttf", "C:/Windows/Fonts/malgun.ttf",
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc", "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
+        "/Library/Fonts/AppleGothic.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    for c in cands:
+        if os.path.exists(c):
+            try:
+                return ImageFont.truetype(c, size)
+            except Exception:  # noqa: BLE001
+                pass
+    return ImageFont.load_default(size)
+
+
+def header_image(song, artist, width, scale=1.0):
+    """제목(가운데, 크게) + 원곡자(오른쪽) 머리글 이미지."""
+    from PIL import ImageDraw
+    song, artist = (song or "").strip(), (artist or "").strip()
+    if not song and not artist:
+        return None
+    ft, fa = _font(int(56 * scale)), _font(int(30 * scale))
+    pad = int(20 * scale)
+    h = pad + (int(70 * scale) if song else 0) + (int(44 * scale) if artist else 0) + pad
+    img = Image.new("RGB", (width, h), "white")
+    d = ImageDraw.Draw(img)
+    y = pad
+    if song:
+        # 너무 길면 글자 크기 줄이기
+        size = int(56 * scale)
+        while size > 20 and d.textlength(song, font=ft) > width * 0.9:
+            size -= 4
+            ft = _font(size)
+        d.text((width / 2, y), song, font=ft, fill="black", anchor="mt")
+        y += int(70 * scale)
+    if artist:
+        d.text((width - pad, y), artist, font=fa, fill=(60, 60, 60), anchor="rt")
+    return img
