@@ -1,0 +1,25 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: 악보PDF-windows
+          - os: macos-latest
+            name: 악보PDF-mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile --name "${{ matrix.name }}" --collect-all yt_dlp --collect-submodules googleapiclient --collect-data googleapiclient main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/*
